@@ -1,0 +1,17 @@
+Metadata-Version: 2.4
+Name: pii-protect-tests
+Version: 1.0.0
+Summary: Comprehensive test suite for the pii-protect library
+Requires-Python: >=3.10
+Requires-Dist: pii-protect[all]
+Requires-Dist: pytest>=8.0
+Requires-Dist: pytest-asyncio>=0.24
+Requires-Dist: pytest-cov>=5.0
+Requires-Dist: pytest-timeout>=2.3
+Requires-Dist: pytest-xdist>=3.5
+Requires-Dist: pytest-benchmark>=4.0
+Requires-Dist: pytest-html>=4.1
+Requires-Dist: faker>=28.0
+Provides-Extra: dev
+Requires-Dist: ruff>=0.5; extra == "dev"
+Requires-Dist: mypy>=1.10; extra == "dev"
