@@ -1,14 +1,10 @@
 """
-Shared fixtures for dataset-based PII testing.
+Dataset-testing helpers specific to tests/dataset/.
 
-Loads the synthetic and Kaggle CSV datasets, provides PIIMaskingEngine
-instances, and helpers for PII value extraction.
+The CSV-loading fixtures (synthetic_rows, kaggle_rows) live in the root
+tests/conftest.py, shared with tests/llm/live/, which also evaluates
+Groq responses against these same datasets.
 """
-import csv
-import os
-import ast
-from pathlib import Path
-
 import pytest
 import pytest_asyncio
 
@@ -32,42 +28,6 @@ custom_patterns = [
     (re.compile(r"\b[A-Z]\d{7}\b"), EntityType.OTHER, 0.95),  # Passport Number
 ]
 RegexPatternLibrary.PATTERNS.extend(custom_patterns)
-
-
-
-DATASET_DIR = Path(__file__).resolve().parent.parent.parent / "dataset"
-
-
-# ---------------------------------------------------------------------------
-# Dataset loading fixtures
-# ---------------------------------------------------------------------------
-
-@pytest.fixture(scope="session")
-def synthetic_rows():
-    """Load all rows from synthetic_pii.csv as list of dicts."""
-    path = DATASET_DIR / "synthetic_pii.csv"
-    assert path.exists(), f"Synthetic dataset not found at {path}"
-    with open(path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        return list(reader)
-
-
-@pytest.fixture(scope="session")
-def kaggle_rows():
-    """Load all rows from kaggle_pii.csv as list of dicts."""
-    path = DATASET_DIR / "kaggle_pii.csv"
-    assert path.exists(), f"Kaggle dataset not found at {path}"
-    with open(path, "r", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        rows = []
-        for row in reader:
-            # Parse labeled_pii from string repr back to dict
-            try:
-                row["labeled_pii_dict"] = ast.literal_eval(row["labeled_pii"])
-            except Exception:
-                row["labeled_pii_dict"] = {}
-            rows.append(row)
-        return rows
 
 
 # ---------------------------------------------------------------------------

@@ -38,6 +38,8 @@ sys.meta_path.insert(0, PiiShieldRedirectFinder())
 
 
 import asyncio
+import ast
+import csv
 import os
 import tempfile
 from pathlib import Path
@@ -49,6 +51,37 @@ from pii_protect import PIIMaskingEngine
 from pii_protect.crypto import AESGCMCipher
 from pii_protect.storage import InMemoryStorage, FileSystemStorage
 
+
+DATASET_DIR = Path(__file__).resolve().parent.parent / "dataset"
+
+
+# ---------------------------------------------------------------------------
+# Dataset loading fixtures (shared by tests/dataset/ and tests/llm/live/)
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(scope="session")
+def synthetic_rows() -> list[dict]:
+    """Load all rows from dataset/synthetic_pii.csv as a list of dicts."""
+    path = DATASET_DIR / "synthetic_pii.csv"
+    assert path.exists(), f"Synthetic dataset not found at {path}"
+    with open(path, "r", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+@pytest.fixture(scope="session")
+def kaggle_rows() -> list[dict]:
+    """Load all rows from dataset/kaggle_pii.csv, with labeled_pii parsed to a dict."""
+    path = DATASET_DIR / "kaggle_pii.csv"
+    assert path.exists(), f"Kaggle dataset not found at {path}"
+    with open(path, "r", encoding="utf-8") as f:
+        rows = []
+        for row in csv.DictReader(f):
+            try:
+                row["labeled_pii_dict"] = ast.literal_eval(row["labeled_pii"])
+            except Exception:
+                row["labeled_pii_dict"] = {}
+            rows.append(row)
+        return rows
 
 
 # ---------------------------------------------------------------------------

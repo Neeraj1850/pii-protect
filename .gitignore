@@ -1,2 +1,22 @@
+# Secrets / local config
 .env
 pii_protect_test_documentation.docx
+.clinerules
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+reports/
+.deepeval/
+
+# Editor / OS
+.vscode/
+.DS_Store

@@ -43,12 +43,12 @@ if [[ "$1" == "--install" || "$1" == "-i" ]]; then
     fi
 fi
 
-# Run tests options
-RUN_UNIT=true
-RUN_INTEGRATION=true
-RUN_DETECTION=true
-RUN_LLM=true
-RUN_EDGE=true
+# Test path selection. Defaults to the whole suite; a *-only flag narrows
+# TARGET_PATHS to one directory. --llm-live opts IN to the live Groq API
+# tests (real network calls, needs GROQ_API_KEY) since they're excluded by
+# default to keep a plain ./run_tests.sh run offline and quota-free.
+TARGET_PATHS="tests"
+INCLUDE_LLM_LIVE=false
 RUN_BENCHMARK=false
 GEN_HTML=true
 GEN_COV=true
@@ -57,10 +57,17 @@ GEN_COV=true
 shift $((OPTIND - 1))
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
-        --unit-only) RUN_UNIT=true; RUN_INTEGRATION=false; RUN_DETECTION=false; RUN_LLM=false; RUN_EDGE=false; RUN_BENCHMARK=false ;;
-        --integration-only) RUN_UNIT=false; RUN_INTEGRATION=true; RUN_DETECTION=false; RUN_LLM=false; RUN_EDGE=false; RUN_BENCHMARK=false ;;
-        --llm-only) RUN_UNIT=false; RUN_INTEGRATION=false; RUN_DETECTION=false; RUN_LLM=true; RUN_EDGE=false; RUN_BENCHMARK=false ;;
-        --benchmark) RUN_BENCHMARK=true ;;
+        --unit-only) TARGET_PATHS="tests/unit" ;;
+        --integration-only) TARGET_PATHS="tests/integration" ;;
+        --detection-only) TARGET_PATHS="tests/detection" ;;
+        --edge-only) TARGET_PATHS="tests/edge_cases" ;;
+        --dataset-only) TARGET_PATHS="tests/dataset" ;;
+        --llm-only) TARGET_PATHS="tests/llm" ;;
+        --llm-live-only) TARGET_PATHS="tests/llm/live"; INCLUDE_LLM_LIVE=true ;;
+        --postgres-only) TARGET_PATHS="tests/unit/storage/test_postgres.py tests/integration/test_postgres_engine.py" ;;
+        --redis-only) TARGET_PATHS="tests/unit/storage/test_redis.py tests/integration/test_redis_engine.py" ;;
+        --llm-live) INCLUDE_LLM_LIVE=true ;;
+        --benchmark) RUN_BENCHMARK=true; TARGET_PATHS="tests/benchmarks" ;;
         --no-html) GEN_HTML=false ;;
         --no-cov) GEN_COV=false ;;
         *) echo -e "${YELLOW}Unknown option: $1. Running all tests.${NC}" ;;
@@ -82,16 +89,18 @@ fi
 mkdir -p reports
 
 # Execute pytest
-echo -e "${GREEN}Running selected test suites...${NC}"
-pytest_cmd="pytest $PYTEST_FLAGS"
+echo -e "${GREEN}Running selected test suites: ${TARGET_PATHS}${NC}"
+pytest_cmd="pytest $PYTEST_FLAGS $TARGET_PATHS"
 
-# If benchmarking, run benchmark only
+# If benchmarking, run benchmark only; otherwise exclude benchmark markers,
+# and exclude live Groq tests unless explicitly opted into.
 if [ "$RUN_BENCHMARK" = true ]; then
     echo -e "${YELLOW}Running performance benchmarks...${NC}"
     pytest_cmd="$pytest_cmd --benchmark-only"
-else
-    # Exclude benchmark markers by default
+elif [ "$INCLUDE_LLM_LIVE" = true ]; then
     pytest_cmd="$pytest_cmd -m 'not benchmark'"
+else
+    pytest_cmd="$pytest_cmd -m 'not benchmark and not llm_integration'"
 fi
 
 # Run the command

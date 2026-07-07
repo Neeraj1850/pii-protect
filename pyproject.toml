@@ -59,8 +59,6 @@ select = ["E", "F", "W", "I"]
 source = ["pii_protect"]
 omit = [
     "tests/*",
-    "**/postgres.py",
-    "**/redis_backend.py",
 ]
 
 [tool.coverage.report]
