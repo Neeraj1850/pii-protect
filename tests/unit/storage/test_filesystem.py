@@ -91,3 +91,55 @@ class TestFileSystemStorage:
         await storage.put(record)
         found = await storage.find_by_value_hash("fs_unique", scope="scope-1")
         assert found == record.token_value
+
+    async def test_touch_increments_access_count(self, storage):
+        record = make_record(token="{{EMAIL:fs050}}", value_hash="h50")
+        await storage.put(record)
+        await storage.touch(record.token_value)
+        result = await storage.get(record.token_value)
+        assert result.access_count == 1
+
+    async def test_touch_twice_increments_twice(self, storage):
+        record = make_record(token="{{EMAIL:fs051}}", value_hash="h51")
+        await storage.put(record)
+        await storage.touch(record.token_value)
+        await storage.touch(record.token_value)
+        result = await storage.get(record.token_value)
+        assert result.access_count == 2
+
+    async def test_touch_nonexistent_token_is_noop(self, storage):
+        await storage.touch("{{FAKE:00000}}")  # must not raise
+
+    async def test_put_same_token_twice_is_noop(self, storage):
+        """The second put() with an identical token_value must not
+        duplicate or overwrite the existing record (idempotent upsert)."""
+        record = make_record(token="{{EMAIL:fs060}}", value_hash="h60")
+        await storage.put(record)
+        await storage.put(record)
+        result = await storage.get(record.token_value)
+        assert result is not None
+        assert result.token_value == record.token_value
+
+    async def test_atomic_write_cleans_up_temp_file_on_failure(self, storage, vault_path):
+        """If the write to the temp file fails partway through, the atomic
+        write's `finally` block must delete the leftover temp file rather
+        than leaving a stray `.vault.json.<random>.tmp` next to the vault."""
+        import json as json_module
+        import pii_protect.storage.filesystem as fs_module
+
+        original_dump = json_module.dump
+
+        def failing_dump(*args, **kwargs):
+            raise OSError("simulated disk failure mid-write")
+
+        original = fs_module.json.dump
+        fs_module.json.dump = failing_dump
+        try:
+            with pytest.raises(OSError):
+                await storage.put(make_record(token="{{EMAIL:fs070}}", value_hash="h70"))
+        finally:
+            fs_module.json.dump = original
+
+        vault_dir = Path(vault_path).parent
+        leftover_tmp_files = list(vault_dir.glob(".*.tmp"))
+        assert leftover_tmp_files == [], f"Temp file(s) not cleaned up: {leftover_tmp_files}"

@@ -101,3 +101,34 @@ class TestEncryptDecrypt:
         encrypted = cipher.encrypt(plaintext, aad)
         assert cipher.decrypt(encrypted.ciphertext, encrypted.iv, encrypted.tag, aad) == plaintext
 
+    def test_init_wrong_key_length_raises(self):
+        with pytest.raises(ValueError):
+            AESGCMCipher(b"too-short-key")
+
+
+class TestFromHex:
+    """AESGCMCipher.from_hex() lets callers configure the engine with a
+    64-character hex string instead of raw bytes (e.g. from an env var).
+    Nothing previously exercised this alternate constructor."""
+
+    def test_from_hex_roundtrip(self):
+        cipher = AESGCMCipher.from_hex("00" * 32)
+        encrypted = cipher.encrypt("secret@acme.com", b"EMAIL")
+        decrypted = cipher.decrypt(encrypted.ciphertext, encrypted.iv, encrypted.tag, b"EMAIL")
+        assert decrypted == "secret@acme.com"
+
+    def test_from_hex_matches_equivalent_raw_key(self):
+        raw_key = AESGCMCipher.generate_key()
+        hex_key = raw_key.hex()
+        cipher_from_hex = AESGCMCipher.from_hex(hex_key)
+        cipher_from_bytes = AESGCMCipher(raw_key)
+        assert cipher_from_hex.key == cipher_from_bytes.key
+
+    def test_from_hex_strips_whitespace(self):
+        cipher = AESGCMCipher.from_hex(f"  {'ab' * 32}  \n")
+        assert len(cipher.key) == 32
+
+    def test_from_hex_wrong_length_raises(self):
+        with pytest.raises(ValueError):
+            AESGCMCipher.from_hex("ab" * 10)
+

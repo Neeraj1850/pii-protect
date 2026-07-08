@@ -81,3 +81,22 @@ class TestRedact:
         assert "billing@acme.com" not in result
         assert "27AAPFU0939F1ZV" not in result
         assert "ABCDE1234F" not in result
+
+
+class TestEngineHexStringKey:
+    """PIIMaskingEngine accepts encryption_key as a 64-char hex string, not
+    just raw bytes — a convenience for loading keys from env vars/config
+    files. Nothing previously constructed the engine this way."""
+
+    @pytest.mark.asyncio
+    async def test_engine_accepts_hex_string_key(self):
+        hex_key = "ab" * 32
+        async with PIIMaskingEngine(
+            storage=InMemoryStorage(),
+            encryption_key=hex_key,
+        ) as engine:
+            result = await engine.mask("Contact john@acme.com for details.")
+            assert "john@acme.com" not in result.masked_text
+
+            unmasked = await engine.unmask(result.masked_text)
+            assert "john@acme.com" in unmasked

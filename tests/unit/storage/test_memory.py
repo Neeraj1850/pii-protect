@@ -77,9 +77,32 @@ class TestInMemoryStorage:
         assert result is None
 
     async def test_touch(self, storage):
+        """touch() must actually bump access_count, not just run without
+        raising — the original version of this test called touch() but
+        never checked the counter moved, so the line was "covered" without
+        the behavior being verified."""
         record = make_record()
         await storage.put(record)
         await storage.touch(record.token_value)
+        result = await storage.get(record.token_value)
+        assert result.access_count == 1
+
+    async def test_touch_twice_increments_twice(self, storage):
+        record = make_record(token="{{EMAIL:tch02}}", value_hash="h_tch2")
+        await storage.put(record)
+        await storage.touch(record.token_value)
+        await storage.touch(record.token_value)
+        result = await storage.get(record.token_value)
+        assert result.access_count == 2
+
+    async def test_touch_nonexistent_token_is_noop(self, storage):
+        await storage.touch("{{FAKE:00000}}")  # must not raise
+
+    async def test_len_reports_token_count(self, storage):
+        assert len(storage) == 0
+        await storage.put(make_record(token="{{EMAIL:len01}}", value_hash="h_len1"))
+        await storage.put(make_record(token="{{EMAIL:len02}}", value_hash="h_len2"))
+        assert len(storage) == 2
 
     async def test_separate_instances_isolated(self):
         s1 = InMemoryStorage()
