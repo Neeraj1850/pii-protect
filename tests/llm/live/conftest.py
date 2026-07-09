@@ -152,3 +152,55 @@ def llm():
 def groq_eval_model():
     """A GroqDeepEvalLLM instance for DeepEval GEval metric evaluation."""
     return GroqDeepEvalLLM(model_name=GROQ_MODEL)
+
+
+@pytest.fixture(autouse=True)
+def _time_groq_calls(request):
+    """Print wall-clock time for every real Groq API call made during a
+    live test: ChatGroq.invoke() (the assistant response) and
+    GroqDeepEvalLLM.generate()/a_generate() (the DeepEval GEval judge).
+    Only patches fixtures the test actually requested, so tests that don't
+    use `llm`/`groq_eval_model` don't pay for constructing them.
+    """
+    patched = []
+
+    def _wrap(obj, attr_name, label):
+        original = getattr(obj, attr_name)
+
+        if asyncio.iscoroutinefunction(original):
+            # Calling an `async def` only creates a coroutine object — it
+            # doesn't run the body until awaited. Timing the call itself
+            # (as the sync branch below does) would measure ~0s regardless
+            # of how long the real network call takes, so this branch must
+            # await the coroutine inside the timer instead.
+            async def timed(*args, **kwargs):
+                start = time.perf_counter()
+                result = await original(*args, **kwargs)
+                elapsed = time.perf_counter() - start
+                print(f"\n[groq call] {label}.{attr_name} took {elapsed:.2f}s")
+                return result
+        else:
+            def timed(*args, **kwargs):
+                start = time.perf_counter()
+                result = original(*args, **kwargs)
+                elapsed = time.perf_counter() - start
+                print(f"\n[groq call] {label}.{attr_name} took {elapsed:.2f}s")
+                return result
+
+        # ChatGroq is a pydantic model and rejects setattr() for names that
+        # aren't declared fields; bypass validation via object.__setattr__.
+        object.__setattr__(obj, attr_name, timed)
+        patched.append((obj, attr_name, original))
+
+    if "llm" in request.fixturenames:
+        _wrap(request.getfixturevalue("llm"), "invoke", "ChatGroq")
+
+    if "groq_eval_model" in request.fixturenames:
+        eval_model = request.getfixturevalue("groq_eval_model")
+        _wrap(eval_model, "generate", "GroqDeepEvalLLM")
+        _wrap(eval_model, "a_generate", "GroqDeepEvalLLM")
+
+    yield
+
+    for obj, attr_name, original in patched:
+        object.__setattr__(obj, attr_name, original)
